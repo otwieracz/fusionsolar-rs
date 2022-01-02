@@ -1,0 +1,21 @@
+{
+  "data": [
+    {
+      "aidType": 1,
+      "buildState": null,
+      "capacity": 0.005,
+      "combineType": null,
+      "linkmanPho": "",
+      "stationAddr": "StationAddr",
+      "stationCode": "StationCode",
+      "stationLinkman": "StationLinkman",
+      "stationName": "StationName"
+    }
+  ],
+  "failCode": 0,
+  "message": null,
+  "params": {
+    "currentTime": 1640728119199
+  },
+  "success": true
+}

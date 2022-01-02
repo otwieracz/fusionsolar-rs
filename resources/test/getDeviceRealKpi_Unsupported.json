@@ -1,0 +1,18 @@
+{
+  "data": [
+    {
+      "devId": 12313123,
+      "dataItemMap": {
+        "unsupported-property": 0
+      }
+    }
+  ],
+  "failCode": 0,
+  "message": null,
+  "params": {
+    "currentTime": 1635758600700,
+    "devIds": "12313123",
+    "devTypeId": 9999 
+  },
+  "success": true
+}

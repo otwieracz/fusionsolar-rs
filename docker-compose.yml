@@ -1,0 +1,10 @@
+version: "3.8"
+services:
+  fusionsolar-rs:
+    build:
+      context: .
+    ports:
+      - "8000:8000"
+    environment:
+      "FS_USERNAME": "login"
+      "FS_PASSWORD": "pass"
