@@ -123,13 +123,11 @@ pub async fn stations(api: &model::LoggedInApi) -> Result<Vec<model::Station>, E
             let stations = response
                 .data
                 .iter()
-                .map(|sta_resp| {
-                    model::station(
-                        sta_resp.station_code.clone(),
-                        sta_resp.station_name.clone(),
-                        /* convert MWh to kWh */
-                        sta_resp.capacity * 1000.0,
-                    )
+                .map(|sta_resp| model::Station {
+                    code: sta_resp.station_code.clone(),
+                    name: sta_resp.station_name.clone(),
+                    /* convert MWh to kWh */
+                    capacity: sta_resp.capacity * 1000.0,
                 })
                 .collect();
             Ok(stations)
@@ -150,8 +148,9 @@ pub async fn station_real_kpi(
             let stations = response
                 .data
                 .iter()
-                .map(|resp| {
-                    model::station_real_kpi(resp.station_code.clone(), resp.data_item_map.day_power)
+                .map(|resp| model::StationRealKpi {
+                    code: resp.station_code.clone(),
+                    day_power: resp.data_item_map.day_power,
                 })
                 .collect();
             Ok(stations)
@@ -172,7 +171,10 @@ pub async fn devices(
             let devices = response
                 .data
                 .iter()
-                .map(|resp| model::device(resp.dev_type_id, resp.id))
+                .map(|resp| model::Device {
+                    type_id: resp.dev_type_id,
+                    id: resp.id,
+                })
                 .collect();
             Ok(devices)
         }
@@ -196,14 +198,10 @@ pub async fn device_real_kpi(
                         let devices = response
                             .data
                             .iter()
-                            .map(|resp| {
-                                model::DeviceRealKpi::StringInverterRealKpi(
-                                    model::StringInverterRealKpi {
-                                        id: resp.dev_id,
-                                        temperature: resp.data_item_map.temperature,
-                                        active_power: resp.data_item_map.active_power,
-                                    },
-                                )
+                            .map(|resp| model::DeviceRealKpi {
+                                id: resp.dev_id,
+                                temperature: Some(resp.data_item_map.temperature),
+                                active_power: Some(resp.data_item_map.active_power),
                             })
                             .collect();
                         Ok(devices)

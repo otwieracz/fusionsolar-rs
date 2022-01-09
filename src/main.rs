@@ -38,30 +38,30 @@ lazy_static! {
 }
 
 // Process DeviceRealKpi `device_real_kpi` of `device` installed in `station` and feed them to
-// Prometheus metrics. Implementation is dependen on specific variant of DeviceRealKpi - various
-// devices provide different KPIs
+// Prometheus metrics. Based on device type, different KPIs can be presented.
 fn process_device_real_kpi(
     dev_real_kpi: &DeviceRealKpi,
     station: &Station,
     device: fusionsolar_rs::model::Device,
 ) {
-    match dev_real_kpi {
-        DeviceRealKpi::StringInverterRealKpi(string_inverter_kpi) => {
-            DEVICE_ACTIVE_POWER_GAUGE
-                .with_label_values(&[
-                    &station.code,
-                    &string_inverter_kpi.id.to_string(),
-                    &(device.type_id as u64).to_string(),
-                ])
-                .set(string_inverter_kpi.active_power);
-            DEVICE_TEMPERAURE_GAUGE
-                .with_label_values(&[
-                    &station.code,
-                    &string_inverter_kpi.id.to_string(),
-                    &(device.type_id as u64).to_string(),
-                ])
-                .set(string_inverter_kpi.temperature);
-        }
+    if let Some(active_power) = dev_real_kpi.active_power {
+        DEVICE_ACTIVE_POWER_GAUGE
+            .with_label_values(&[
+                &station.code,
+                &dev_real_kpi.id.to_string(),
+                &(device.type_id as u64).to_string(),
+            ])
+            .set(active_power);
+    }
+
+    if let Some(temperature) = dev_real_kpi.temperature {
+        DEVICE_TEMPERAURE_GAUGE
+            .with_label_values(&[
+                &station.code,
+                &dev_real_kpi.id.to_string(),
+                &(device.type_id as u64).to_string(),
+            ])
+            .set(temperature);
     }
 }
 

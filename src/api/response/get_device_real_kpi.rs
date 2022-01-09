@@ -2,6 +2,7 @@ use crate::api::response::device_type::DeviceTypeId;
 use serde::Deserialize;
 use serde_json::Value;
 
+/* Device Type 1: String Inverter */
 pub mod string_inverter {
     use serde::Deserialize;
 
@@ -43,6 +44,7 @@ impl<'de> serde::Deserialize<'de> for GetDeviceRealKpi {
         match num::FromPrimitive::from_u64(device_type_id)
             .ok_or_else(|| serde::de::Error::custom("unexpected error"))?
         {
+            /* TODO: unwraps here */
             DeviceTypeId::StringInverter => Ok(GetDeviceRealKpi::StringInverter(
                 StringInverter::deserialize(data).unwrap(),
             )),
