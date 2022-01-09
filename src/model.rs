@@ -1,4 +1,4 @@
-use crate::api::response::DeviceTypeId;
+use crate::api::response::device_type::DeviceTypeId;
 
 type KWh = f64;
 

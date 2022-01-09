@@ -2,8 +2,9 @@ mod api;
 pub mod model;
 
 use api::endpoint;
+use api::response::device_type::DeviceTypeId;
 use api::response::get_device_real_kpi::GetDeviceRealKpi;
-use api::response::{DeviceTypeId, FusionsolarApiResponse};
+use api::response::FusionsolarApiResponse;
 
 use std::collections::HashMap;
 
