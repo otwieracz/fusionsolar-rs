@@ -1,8 +1,8 @@
+use num_derive::FromPrimitive;
 use serde::Deserialize;
 use serde_json::Value;
-use std::convert::From;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, FromPrimitive)]
 pub enum DeviceTypeId {
     UnsupportedDeviceType,
     StringInverter = 1,
@@ -12,24 +12,12 @@ impl<'de> serde::Deserialize<'de> for DeviceTypeId {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let value = Value::deserialize(d)?;
 
-        match Value::as_u64(&value) {
-            Some(v) => {
-                let type_id: DeviceTypeId = v.into();
-                Ok(type_id)
-            }
-            None => todo!(),
-        }
-    }
-}
-
-impl From<u64> for DeviceTypeId {
-    fn from(value: u64) -> Self {
-        match value {
-            type_id if type_id == DeviceTypeId::StringInverter as u64 => {
-                DeviceTypeId::StringInverter
-            }
-            _ => DeviceTypeId::UnsupportedDeviceType,
-        }
+        Value::as_u64(&value)
+            .ok_or_else(|| serde::de::Error::missing_field("deviceTypeId"))
+            .map(|v| match num::FromPrimitive::from_u64(v) {
+                Some(device_type_id) => device_type_id,
+                None => DeviceTypeId::UnsupportedDeviceType,
+            })
     }
 }
 
@@ -91,7 +79,6 @@ pub mod get_device_real_kpi {
     use super::DeviceTypeId;
     use serde::Deserialize;
     use serde_json::Value;
-    use std::convert::Into;
 
     pub mod string_inverter {
         use serde::Deserialize;
@@ -122,23 +109,25 @@ pub mod get_device_real_kpi {
 
     impl<'de> serde::Deserialize<'de> for GetDeviceRealKpi {
         fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-            let value = Value::deserialize(d)?;
+            let data = Value::deserialize(d)?;
 
-            match value
+            let device_type_id = data
                 .get("params")
                 .and_then(|v| v.get("devTypeId"))
                 .and_then(Value::as_u64)
+                .ok_or_else(|| serde::de::Error::missing_field("devTypeId"))?;
+
+            /* Deserialize into variant of `GetDeviceRealKpi` depending on `.params.devTypeId` */
+            match num::FromPrimitive::from_u64(device_type_id)
+                .ok_or_else(|| serde::de::Error::custom("unexpected error"))?
             {
-                Some(tag) => match tag.into() {
-                    DeviceTypeId::StringInverter => Ok(GetDeviceRealKpi::StringInverter(
-                        StringInverter::deserialize(value).unwrap(),
-                    )),
-                    DeviceTypeId::UnsupportedDeviceType => Err(serde::de::Error::custom(format!(
-                        "Unsupported GetDeviceRealKpi device type: {}",
-                        tag
-                    ))),
-                },
-                None => todo!(),
+                DeviceTypeId::StringInverter => Ok(GetDeviceRealKpi::StringInverter(
+                    StringInverter::deserialize(data).unwrap(),
+                )),
+                DeviceTypeId::UnsupportedDeviceType => Err(serde::de::Error::custom(format!(
+                    "Unsupported GetDeviceRealKpi device type: {}",
+                    device_type_id
+                ))),
             }
         }
     }
@@ -192,6 +181,14 @@ mod test {
     }
 
     #[test]
+    fn get_dev_list() {
+        let input = read_resource("getDevList.json");
+        let output: super::get_device_list::GetDevicesList = serde_json::from_str(&input).unwrap();
+        assert_eq!("devName1", output.data[0].dev_name);
+        assert_eq!("devName2", output.data[1].dev_name);
+    }
+
+    #[test]
     fn get_device_real_kpi() {
         let input = read_resource("getDeviceRealKpi.json");
         let output: GetDeviceRealKpi = serde_json::from_str(&input).unwrap();
@@ -205,12 +202,28 @@ mod test {
     #[test]
     #[should_panic]
     fn get_device_real_kpi_unsupported() {
-        let input = read_resource("getDeviceRealKpi_Unsupported.json");
-        let output: GetDeviceRealKpi = serde_json::from_str(&input).unwrap();
-        match output {
+        let unsupported_type = read_resource("getDeviceRealKpi_Unsupported.json");
+        let unsupported_type_output: GetDeviceRealKpi =
+            serde_json::from_str(&unsupported_type).unwrap();
+        match unsupported_type_output {
             GetDeviceRealKpi::StringInverter(i) => {
                 assert_eq!(2.053, i.data[0].data_item_map.active_power);
             }
         }
+    }
+
+    #[test]
+    #[should_panic]
+    fn get_device_real_kpi_valid_json() {
+        let valid_json_input = read_resource("valid_json.json");
+        let _valid_json_output: GetDeviceRealKpi = serde_json::from_str(&valid_json_input).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn get_device_real_kpi_invalid_json() {
+        let invalid_json_input = read_resource("invalid_json.json");
+        let _invalid_json_output: GetDeviceRealKpi =
+            serde_json::from_str(&invalid_json_input).unwrap();
     }
 }

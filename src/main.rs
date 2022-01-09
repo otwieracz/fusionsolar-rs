@@ -37,6 +37,34 @@ lazy_static! {
     .unwrap();
 }
 
+// Process DeviceRealKpi `device_real_kpi` of `device` installed in `station` and feed them to
+// Prometheus metrics. Implementation is dependen on specific variant of DeviceRealKpi - various
+// devices provide different KPIs
+fn process_device_real_kpi(
+    dev_real_kpi: &DeviceRealKpi,
+    station: &Station,
+    device: fusionsolar_rs::model::Device,
+) {
+    match dev_real_kpi {
+        DeviceRealKpi::StringInverterRealKpi(string_inverter_kpi) => {
+            DEVICE_ACTIVE_POWER_GAUGE
+                .with_label_values(&[
+                    &station.code,
+                    &string_inverter_kpi.id.to_string(),
+                    &(device.type_id as u64).to_string(),
+                ])
+                .set(string_inverter_kpi.active_power);
+            DEVICE_TEMPERAURE_GAUGE
+                .with_label_values(&[
+                    &station.code,
+                    &string_inverter_kpi.id.to_string(),
+                    &(device.type_id as u64).to_string(),
+                ])
+                .set(string_inverter_kpi.temperature);
+        }
+    }
+}
+
 async fn collect_station_devices(
     api: &LoggedInApi,
     station: &Station,
@@ -45,38 +73,18 @@ async fn collect_station_devices(
     log::debug!("devices: {:?}", devices);
 
     for device in devices {
-        match fusionsolar_rs::device_real_kpi(api, &device).await {
-            Ok(dev_kpi_vec) => match dev_kpi_vec.get(0) {
-                None => {
-                    log::warn!(
-                        "No KPI returned for device {} of station {}",
-                        device.id,
-                        station.code
-                    );
-                }
-                Some(dev_kpi) => match dev_kpi {
-                    DeviceRealKpi::StringInverterRealKpi(string_inverter_kpi) => {
-                        DEVICE_ACTIVE_POWER_GAUGE
-                            .with_label_values(&[
-                                &station.code,
-                                &string_inverter_kpi.id.to_string(),
-                                &(device.type_id as u64).to_string(),
-                            ])
-                            .set(string_inverter_kpi.active_power);
-                        DEVICE_TEMPERAURE_GAUGE
-                            .with_label_values(&[
-                                &station.code,
-                                &string_inverter_kpi.id.to_string(),
-                                &(device.type_id as u64).to_string(),
-                            ])
-                            .set(string_inverter_kpi.temperature);
-                    }
-                },
-            },
-            Err(e) => log::debug!("{:?}: {:?}", e, device),
+        if let Ok(dev_kpi_vec) = fusionsolar_rs::device_real_kpi(api, &device).await {
+            if let Some(dev_real_kpi) = dev_kpi_vec.get(0) {
+                process_device_real_kpi(dev_real_kpi, station, device);
+            } else {
+                log::error!(
+                    "No KPI returned for device {} of station {}",
+                    device.id,
+                    station.code
+                );
+            }
         }
     }
-
     Ok(())
 }
 
@@ -157,10 +165,3 @@ fn rocket() -> _ {
     let api = fusionsolar_rs::api(settings.api_url, settings.username, settings.password);
     rocket::build().manage(api).mount("/", routes![metrics])
 }
-
-// #[tokio::main]
-// async fn main() {
-//     let settings = read_settings();
-//     let api = fusionsolar_rs::api(settings.api_url, settings.username, settings.password);
-//     collect_metrics(&api).await.unwrap();
-// }

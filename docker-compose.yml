@@ -6,5 +6,5 @@ services:
     ports:
       - "8000:8000"
     environment:
-      "FS_USERNAME": "login"
-      "FS_PASSWORD": "pass"
+      - "FS_USERNAME=${USERNAME}"
+      - "FS_PASSWORD=${PASSWORD}"

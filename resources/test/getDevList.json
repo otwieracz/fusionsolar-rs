@@ -1,0 +1,33 @@
+{
+  "data": [
+    {
+      "devName": "devName1",
+      "devTypeId": 62,
+      "esnCode": "ensCode1",
+      "id": 1000000000000001,
+      "invType": "SDongleA-05",
+      "latitude": 11.111111,
+      "longitude": 22.222222,
+      "softwareVersion": "V100R001C00000000",
+      "stationCode": "StationCode"
+    },
+    {
+      "devName": "devName2",
+      "devTypeId": 1,
+      "esnCode": "ensCode2",
+      "id": 1000000000000002,
+      "invType": "SUN2000-5KTL-M1",
+      "latitude": 11.111111,
+      "longitude": 22.222222,
+      "softwareVersion": "V100R001000000000",
+      "stationCode": "StationCode"
+    }
+  ],
+  "failCode": 0,
+  "message": null,
+  "params": {
+    "currentTime": 1635751343299,
+    "stationCodes": "StationCode"
+  },
+  "success": true
+}
