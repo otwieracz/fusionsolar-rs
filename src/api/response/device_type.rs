@@ -1,10 +1,11 @@
-use num_derive::FromPrimitive;
+use crate::model::{DeviceTypeId, SupportedDeviceTypeId};
 use serde_json::Value;
 
-#[derive(Debug, Clone, Copy, FromPrimitive)]
-pub enum DeviceTypeId {
-    UnsupportedDeviceType,
-    StringInverter = 1,
+pub fn from_u64(v: u64) -> DeviceTypeId {
+    match v {
+        1 => DeviceTypeId::SupportedDeviceTypeId(SupportedDeviceTypeId::StringInverter),
+        _ => DeviceTypeId::UnsupportedDeviceTypeId(v),
+    }
 }
 
 impl<'de> serde::Deserialize<'de> for DeviceTypeId {
@@ -13,9 +14,6 @@ impl<'de> serde::Deserialize<'de> for DeviceTypeId {
 
         Value::as_u64(&value)
             .ok_or_else(|| serde::de::Error::missing_field("deviceTypeId"))
-            .map(|v| match num::FromPrimitive::from_u64(v) {
-                Some(device_type_id) => device_type_id,
-                None => DeviceTypeId::UnsupportedDeviceType,
-            })
+            .map(from_u64)
     }
 }

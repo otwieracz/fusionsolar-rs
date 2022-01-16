@@ -6,7 +6,7 @@ extern crate lazy_static;
 extern crate prometheus;
 
 use config::Config;
-use fusionsolar_rs::model::{Api, DeviceRealKpi, LoggedInApi, Station};
+use fusionsolar_rs::model::{Api, DeviceRealKpi, DeviceTypeId, LoggedInApi, Station};
 use prometheus::{Encoder, GaugeVec, TextEncoder};
 use rocket::response::Debug;
 use rocket::State;
@@ -44,24 +44,26 @@ fn process_device_real_kpi(
     station: &Station,
     device: fusionsolar_rs::model::Device,
 ) {
-    if let Some(active_power) = dev_real_kpi.active_power {
-        DEVICE_ACTIVE_POWER_GAUGE
-            .with_label_values(&[
-                &station.code,
-                &dev_real_kpi.id.to_string(),
-                &(device.type_id as u64).to_string(),
-            ])
-            .set(active_power);
-    }
+    if let DeviceTypeId::SupportedDeviceTypeId(type_id) = device.type_id {
+        if let Some(active_power) = dev_real_kpi.active_power {
+            DEVICE_ACTIVE_POWER_GAUGE
+                .with_label_values(&[
+                    &station.code,
+                    &dev_real_kpi.id.to_string(),
+                    &(type_id as u64).to_string(),
+                ])
+                .set(active_power);
+        }
 
-    if let Some(temperature) = dev_real_kpi.temperature {
-        DEVICE_TEMPERAURE_GAUGE
-            .with_label_values(&[
-                &station.code,
-                &dev_real_kpi.id.to_string(),
-                &(device.type_id as u64).to_string(),
-            ])
-            .set(temperature);
+        if let Some(temperature) = dev_real_kpi.temperature {
+            DEVICE_TEMPERAURE_GAUGE
+                .with_label_values(&[
+                    &station.code,
+                    &dev_real_kpi.id.to_string(),
+                    &(type_id as u64).to_string(),
+                ])
+                .set(temperature);
+        }
     }
 }
 
@@ -157,11 +159,21 @@ async fn metrics(api: &State<Api>) -> Result<String, Debug<fusionsolar_rs::Error
     read_metrics().await.map_err(Debug)
 }
 
+#[get("/dump-devices")]
+async fn dump_devices(api: &State<Api>) -> Result<String, Debug<fusionsolar_rs::Error>> {
+    let logged_in_api = fusionsolar_rs::login(api).await?;
+    let dump = fusionsolar_rs::dump_devices(&logged_in_api).await?;
+
+    Ok(format!("{:#?}", dump))
+}
+
 #[launch]
 fn rocket() -> _ {
     env_logger::init();
 
     let settings = read_settings();
     let api = fusionsolar_rs::api(settings.api_url, settings.username, settings.password);
-    rocket::build().manage(api).mount("/", routes![metrics])
+    rocket::build()
+        .manage(api)
+        .mount("/", routes![metrics, dump_devices])
 }

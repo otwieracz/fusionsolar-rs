@@ -1,4 +1,4 @@
-use crate::api::response::device_type::DeviceTypeId;
+use crate::model::DeviceTypeId;
 use serde::Deserialize;
 
 #[derive(Deserialize)]

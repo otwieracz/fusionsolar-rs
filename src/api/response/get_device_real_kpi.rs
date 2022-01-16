@@ -1,4 +1,5 @@
-use crate::api::response::device_type::DeviceTypeId;
+use crate::api::response::device_type;
+use crate::model::{DeviceTypeId, SupportedDeviceTypeId};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -41,17 +42,19 @@ impl<'de> serde::Deserialize<'de> for GetDeviceRealKpi {
             .ok_or_else(|| serde::de::Error::missing_field("devTypeId"))?;
 
         /* Deserialize into variant of `GetDeviceRealKpi` depending on `.params.devTypeId` */
-        match num::FromPrimitive::from_u64(device_type_id)
-            .ok_or_else(|| serde::de::Error::custom("unexpected error"))?
+        if let DeviceTypeId::SupportedDeviceTypeId(supported_type_id) =
+            device_type::from_u64(device_type_id)
         {
-            /* TODO: unwraps here */
-            DeviceTypeId::StringInverter => Ok(GetDeviceRealKpi::StringInverter(
-                StringInverter::deserialize(data).unwrap(),
-            )),
-            DeviceTypeId::UnsupportedDeviceType => Err(serde::de::Error::custom(format!(
+            match supported_type_id {
+                SupportedDeviceTypeId::StringInverter => Ok(GetDeviceRealKpi::StringInverter(
+                    StringInverter::deserialize(data).unwrap(),
+                )),
+            }
+        } else {
+            Err(serde::de::Error::custom(format!(
                 "Unsupported GetDeviceRealKpi device type: {}",
                 device_type_id
-            ))),
+            )))
         }
     }
 }

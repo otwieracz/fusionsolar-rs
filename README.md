@@ -42,3 +42,4 @@ device_temperature{device_id="1000000011111111",device_type_id="1",station_code=
 
 ### TODO
 - Device Report mode for feature requests
+- Rate-limit to prevent API throttling (result caching)

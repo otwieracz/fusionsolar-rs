@@ -1,6 +1,17 @@
-use crate::api::response::device_type::DeviceTypeId;
-
 type KWh = f64;
+
+pub type UnsupportedDeviceTypeId = u64;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SupportedDeviceTypeId {
+    StringInverter = 1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DeviceTypeId {
+    UnsupportedDeviceTypeId(UnsupportedDeviceTypeId),
+    SupportedDeviceTypeId(SupportedDeviceTypeId),
+}
 
 #[derive(Debug, Clone)]
 pub struct Api {
@@ -23,7 +34,7 @@ pub struct Station {
     pub code: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct Device {
     pub type_id: DeviceTypeId,
     pub id: u64,
