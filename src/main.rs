@@ -9,7 +9,9 @@ use config::Config;
 use fusionsolar_rs::model::{Api, DeviceRealKpi, DeviceTypeId, LoggedInApi, Station};
 use prometheus::{Encoder, GaugeVec, TextEncoder};
 use rocket::response::Debug;
-use rocket::State;
+use rocket::{Build, Rocket, State};
+use std::sync::Mutex;
+use std::time::Instant;
 
 const API_URL: &str = "https://eu5.fusionsolar.huawei.com/thirdData";
 
@@ -72,7 +74,6 @@ async fn collect_station_devices(
     station: &Station,
 ) -> Result<(), fusionsolar_rs::Error> {
     let devices = fusionsolar_rs::devices(api, station).await?;
-    log::debug!("devices: {:?}", devices);
 
     for device in devices {
         if let Ok(dev_kpi_vec) = fusionsolar_rs::device_real_kpi(api, &device).await {
@@ -92,7 +93,6 @@ async fn collect_station_devices(
 
 async fn collect_day_power(api: &LoggedInApi) -> Result<(), fusionsolar_rs::Error> {
     let stations = fusionsolar_rs::stations(api).await?;
-    log::debug!("stations: {:?}", stations);
 
     for station in stations {
         let kpi = fusionsolar_rs::station_real_kpi(api, &station).await?;
@@ -135,14 +135,47 @@ async fn read_metrics() -> Result<String, fusionsolar_rs::Error> {
     String::from_utf8(buffer).or(Err(fusionsolar_rs::Error::FormatError))
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct Fusionsolar {
-    pub api_url: String,
-    pub username: String,
-    pub password: String,
+#[derive(Clone, serde::Deserialize)]
+pub struct FusionsolarConfig {
+    api_url: String,
+    username: String,
+    password: String,
+    interval: u64,
 }
 
-pub fn read_settings() -> Fusionsolar {
+pub struct StateData {
+    api: Api,
+    interval: u64,
+    timestamp: Mutex<Option<Instant>>,
+}
+
+impl StateData {
+    fn touch(&self) {
+        if let Ok(mut ts) = self.timestamp.lock() {
+            *ts = Some(Instant::now());
+        } else {
+            log::trace!("Unable to lock timestamp mutex, will refresh again")
+        }
+    }
+
+    fn interval_elapsed(&self, interval_secs: u64) -> bool {
+        let elapsed_opt = self
+            .timestamp
+            .lock()
+            .ok()
+            .map(|a| a.map(|b| b.elapsed().as_secs()))
+            .flatten();
+
+        if let Some(elapsed) = elapsed_opt {
+            elapsed > interval_secs
+        } else {
+            /* If there is None timestamp/elapsed, always return true to trigger action */
+            true
+        }
+    }
+}
+
+pub fn read_settings() -> FusionsolarConfig {
     let mut settings = Config::default();
     settings
         .merge(config::Environment::with_prefix("FS"))
@@ -154,26 +187,37 @@ pub fn read_settings() -> Fusionsolar {
 }
 
 #[get("/metrics")]
-async fn metrics(api: &State<Api>) -> Result<String, Debug<fusionsolar_rs::Error>> {
-    collect_metrics(api).await?;
+async fn metrics(state: &State<StateData>) -> Result<String, Debug<fusionsolar_rs::Error>> {
+    if state.interval_elapsed(state.interval) {
+        collect_metrics(&state.api).await?;
+        state.touch();
+    } else {
+        log::info!("interval time not yet elapsed since last run; returning cached result")
+    }
     read_metrics().await.map_err(Debug)
 }
 
 #[get("/dump-devices")]
-async fn dump_devices(api: &State<Api>) -> Result<String, Debug<fusionsolar_rs::Error>> {
-    let logged_in_api = fusionsolar_rs::login(api).await?;
+async fn dump_devices(state: &State<StateData>) -> Result<String, Debug<fusionsolar_rs::Error>> {
+    let logged_in_api = fusionsolar_rs::login(&state.api).await?;
     let dump = fusionsolar_rs::dump_devices(&logged_in_api).await?;
 
     Ok(format!("{:#?}", dump))
 }
 
 #[launch]
-fn rocket() -> _ {
+fn rocket() -> Rocket<Build> {
     env_logger::init();
 
     let settings = read_settings();
     let api = fusionsolar_rs::api(settings.api_url, settings.username, settings.password);
+    let state = StateData {
+        api,
+        interval: settings.interval,
+        timestamp: Mutex::new(None),
+    };
+
     rocket::build()
-        .manage(api)
+        .manage(state)
         .mount("/", routes![metrics, dump_devices])
 }

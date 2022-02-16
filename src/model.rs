@@ -20,33 +20,29 @@ pub struct Api {
     pub password: String,
 }
 
-#[derive(Debug)]
 pub struct LoggedInApi {
     pub api_url: String,
     pub xsrf_token: String,
     pub client: reqwest::Client,
 }
 
-#[derive(Debug)]
 pub struct Station {
     pub capacity: KWh,
     pub name: String,
     pub code: String,
 }
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Eq, PartialEq, Hash)]
 pub struct Device {
     pub type_id: DeviceTypeId,
     pub id: u64,
 }
 
-#[derive(Debug)]
 pub struct StationRealKpi {
     pub code: String,
     pub day_power: KWh,
 }
 
-#[derive(Debug)]
 pub struct DeviceRealKpi {
     pub id: u64,
     pub temperature: Option<f64>,

@@ -2,10 +2,29 @@
 
 `Prometheus` exporter for Huawei PV inverters.
 
+### Exported metrics
+* `day_power`: total amount of power generated in current day (in kWh)
+* `device_active_power`: active power reported by device
+* `device_temperature`: actual temperature reported by device
+
+### Device support
+Currently, the only device with implemented KPI fetching is String Inverter:
+* `StringInverter` (device type `1`)
+
+To create feature request for any specific device, create an issue with device dump:
+```shell
+$ curl http://127.0.0.1:8000/dump-devices
+```
+
+
+### Notes
+* FusionSolar API has very restrictive API throttling in place. With data being updated not more
+often than every 5 minutes, it's highly recommended to set the `FS_INTERVAL` to at least 120 seconds.
+
 ### Usage
 _requires `cross`[^1] for `musl` cross-compilation_
 
-Set `FS_USERNAME` and `FS_PASSWORD` variables in `.env` file, then:
+Set `FS_USERNAME`, `FS_PASSWORD` and `FS_INTERVAL` variables in `.env` file, then:
 ```shell
 $ make
 cross build --release --target x86_64-unknown-linux-musl
@@ -33,13 +52,4 @@ device_temperature{device_id="1000000011111111",device_type_id="1",station_code=
 
 ```
 
-### Exported metrics
-* `day_power`: total amount of power generated in current day (in kWh)
-* `device_active_power`: active power reported by device
-* `device_temperature`: actual temperature reported by device
-
 [^1]: https://github.com/rust-embedded/cross
-
-### TODO
-- Device Report mode for feature requests
-- Rate-limit to prevent API throttling (result caching)
