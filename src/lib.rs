@@ -37,11 +37,12 @@ pub async fn login(api: &model::Api) -> Result<model::LoggedInApi, Error> {
         .or(Err(Error::InternalError))?;
     let url = format!("{}{}", api.api_url, endpoint::LOGIN);
 
-    let mut map = HashMap::new();
-    map.insert("userName", api.username.to_owned());
-    map.insert("systemCode", api.password.to_owned());
+    let request_body = HashMap::from([
+        ("userName", api.username.to_owned()),
+        ("systemCode", api.password.to_owned()),
+    ]);
 
-    match client.post(url).json(&map).send().await {
+    match client.post(url).json(&request_body).send().await {
         Ok(response) => match response
             .cookies()
             .find(|cookie| cookie.name() == XSRF_TOKEN)
@@ -145,14 +146,14 @@ pub async fn stations(api: &model::LoggedInApi) -> Result<Vec<model::Station>, E
     }
 }
 
+/// Read KPI of specified station.
 pub async fn station_real_kpi(
     api: &model::LoggedInApi,
     station: &model::Station,
 ) -> Result<Vec<model::StationRealKpi>, Error> {
-    let mut map = HashMap::new();
-    map.insert("stationCodes", station.code.to_owned());
+    let request_body = HashMap::from([("stationCodes", station.code.to_owned())]);
 
-    match post(api, endpoint::STATION_REAL_KPI, Some(&map)).await? {
+    match post(api, endpoint::STATION_REAL_KPI, Some(&request_body)).await? {
         FusionsolarApiResponse::GetStationRealKpi(response) => {
             let stations = response
                 .data
@@ -168,14 +169,14 @@ pub async fn station_real_kpi(
     }
 }
 
+/// List all devices for `station`
 pub async fn devices(
     api: &model::LoggedInApi,
     station: &model::Station,
 ) -> Result<Vec<model::Device>, Error> {
-    let mut map = HashMap::new();
-    map.insert("stationCodes", station.code.to_owned());
+    let request_body = HashMap::from([("stationCodes", station.code.to_owned())]);
 
-    match post(api, endpoint::DEVICES, Some(&map)).await? {
+    match post(api, endpoint::DEVICES, Some(&request_body)).await? {
         FusionsolarApiResponse::GetDevicesList(response) => {
             let devices = response
                 .data
@@ -191,6 +192,7 @@ pub async fn devices(
     }
 }
 
+/// Takes `device: Device` and if `device.type_id` is supported, reads KPI for that device.
 pub async fn device_real_kpi(
     api: &model::LoggedInApi,
     device: &model::Device,
@@ -198,11 +200,12 @@ pub async fn device_real_kpi(
     match device.type_id {
         DeviceTypeId::UnsupportedDeviceTypeId(_) => Err(Error::UnknownDeviceType(device.type_id)),
         DeviceTypeId::SupportedDeviceTypeId(type_id) => {
-            let mut map = HashMap::new();
-            map.insert("devIds", device.id.to_string());
-            map.insert("devTypeId", (type_id as u64).to_string());
+            let request_body = HashMap::from([
+                ("devIds", device.id.to_string()),
+                ("devTypeId", (type_id as u64).to_string()),
+            ]);
 
-            match post(api, endpoint::DEVICE_REAL_KPI, Some(&map)).await? {
+            match post(api, endpoint::DEVICE_REAL_KPI, Some(&request_body)).await? {
                 FusionsolarApiResponse::GetDeviceRealKpi(response) => match response {
                     GetDeviceRealKpi::StringInverter(response) => {
                         let devices = response
@@ -223,15 +226,12 @@ pub async fn device_real_kpi(
     }
 }
 
-/*
-Dump devices KPI
-
-Iterate through all stations and all devices within those stations. Collect raw JSON output
-of KPI for feature rporting purposes.
-
-For the sake of simplicity, it's intentionally allowed to panic.
-*/
-
+/// Dump devices KPI
+///
+/// Iterate through all stations and all devices within those stations. Collect raw JSON output
+/// of KPI for feature reporting purposes.
+///
+/// For the sake of simplicity, it's intentionally allowed to panic.
 pub async fn dump_devices(api: &model::LoggedInApi) -> Result<HashMap<u64, Value>, Error> {
     let stations = stations(api).await?;
     let mut dump: HashMap<u64, Value> = HashMap::new();
@@ -239,17 +239,18 @@ pub async fn dump_devices(api: &model::LoggedInApi) -> Result<HashMap<u64, Value
     for station in stations {
         if let Ok(devices) = devices(api, &station).await {
             for device in devices {
-                let mut map = HashMap::new();
-
                 let type_id = match device.type_id {
                     DeviceTypeId::SupportedDeviceTypeId(v) => v as u64,
                     DeviceTypeId::UnsupportedDeviceTypeId(v) => v,
                 };
 
-                map.insert("devIds", device.id.to_string());
-                map.insert("devTypeId", type_id.to_string());
+                let request_body = HashMap::from([
+                    ("devIds", device.id.to_string()),
+                    ("devTypeId", type_id.to_string()),
+                ]);
 
-                let response = post_str(api, endpoint::DEVICE_REAL_KPI, Some(&map)).await?;
+                let response =
+                    post_str(api, endpoint::DEVICE_REAL_KPI, Some(&request_body)).await?;
                 if let Ok(value) = serde_json::from_str::<Value>(&response) {
                     if let Some(data_item_map) = value
                         .get("data")
@@ -264,17 +265,7 @@ pub async fn dump_devices(api: &model::LoggedInApi) -> Result<HashMap<u64, Value
                             device.id
                         );
                     }
-                    // .and_then(|v| v.get(0))
-                    // .and_then(|v| v.get("dataItemMap"))
-                    // .ok_or(Error::UnexpectedApiResponse)?;
                 }
-
-                // match response {
-                //     Ok(s) => {
-                //         dump.insert(device, s);
-                //     }
-                //     Err(e) => log::error!("{:?}", e),
-                // };
             }
         }
     }
