@@ -1,3 +1,4 @@
+use fusionsolar_rs::api;
 use fusionsolar_rs::model::{Api, DeviceRealKpi, DeviceTypeId, LoggedInApi, Station};
 use prometheus::{Encoder, GaugeVec, TextEncoder};
 
@@ -32,13 +33,13 @@ fn process_device_real_kpi(
     station: &Station,
     device: fusionsolar_rs::model::Device,
 ) {
-    if let DeviceTypeId::SupportedDeviceTypeId(type_id) = device.type_id {
+    if (num::FromPrimitive::from_u64(device.type_id) as Option<DeviceTypeId>).is_some() {
         if let Some(active_power) = dev_real_kpi.active_power {
             DEVICE_ACTIVE_POWER_GAUGE
                 .with_label_values(&[
                     &station.code,
                     &dev_real_kpi.id.to_string(),
-                    &(type_id as u64).to_string(),
+                    &(device.type_id).to_string(),
                 ])
                 .set(active_power);
         }
@@ -48,7 +49,7 @@ fn process_device_real_kpi(
                 .with_label_values(&[
                     &station.code,
                     &dev_real_kpi.id.to_string(),
-                    &(type_id as u64).to_string(),
+                    &(device.type_id).to_string(),
                 ])
                 .set(temperature);
         }
@@ -56,14 +57,11 @@ fn process_device_real_kpi(
 }
 
 /// Iterate through all devices within station and collect KPI for supported ones.
-async fn collect_station_devices(
-    api: &LoggedInApi,
-    station: &Station,
-) -> Result<(), fusionsolar_rs::Error> {
-    let devices = fusionsolar_rs::devices(api, station).await?;
+async fn collect_station_devices(api: &LoggedInApi, station: &Station) -> Result<(), api::Error> {
+    let devices = api::devices(api, station).await?;
 
     for device in devices {
-        if let Ok(dev_kpi_vec) = fusionsolar_rs::device_real_kpi(api, &device).await {
+        if let Ok(dev_kpi_vec) = api::device_real_kpi(api, &device).await {
             if let Some(dev_real_kpi) = dev_kpi_vec.get(0) {
                 process_device_real_kpi(dev_real_kpi, station, device);
             } else {
@@ -79,11 +77,11 @@ async fn collect_station_devices(
 }
 
 /// Collect `day_power` metric for every station.
-async fn collect_day_power(api: &LoggedInApi) -> Result<(), fusionsolar_rs::Error> {
-    let stations = fusionsolar_rs::stations(api).await?;
+async fn collect_day_power(api: &LoggedInApi) -> Result<(), api::Error> {
+    let stations = api::stations(api).await?;
 
     for station in stations {
-        let kpi = fusionsolar_rs::station_real_kpi(api, &station).await?;
+        let kpi = api::station_real_kpi(api, &station).await?;
 
         match kpi.get(0) {
             None => {
@@ -103,24 +101,20 @@ async fn collect_day_power(api: &LoggedInApi) -> Result<(), fusionsolar_rs::Erro
 }
 
 /// Collect all supported metrics from `api`, updating Prometheus exporter registry.
-pub async fn collect(api: &Api) -> Result<(), fusionsolar_rs::Error> {
-    let logged_in_api = fusionsolar_rs::login(api).await?;
+pub async fn collect(api: &Api) -> Result<(), api::Error> {
+    let logged_in_api = api::login(api).await?;
     collect_day_power(&logged_in_api).await?;
-    fusionsolar_rs::logout(&logged_in_api).await.or_else(|e| {
-        log::warn!("Error while logging out: {:#?}", e);
-        Ok(())
-    })?;
 
     Ok(())
 }
 
 /// Read metrics from Prometheus exporter registry.
-pub async fn read() -> Result<String, fusionsolar_rs::Error> {
+pub async fn read() -> Result<String, api::Error> {
     // Gather the metrics.
     let mut buffer = Vec::new();
     let encoder = TextEncoder::new();
     let metric_families = prometheus::gather();
 
     encoder.encode(&metric_families, &mut buffer).unwrap();
-    String::from_utf8(buffer).or(Err(fusionsolar_rs::Error::FormatError))
+    String::from_utf8(buffer).or(Err(api::Error::FormatError))
 }

@@ -6,6 +6,7 @@ extern crate prometheus;
 extern crate rocket;
 
 use config::Config;
+use fusionsolar_rs::api;
 use fusionsolar_rs::model::Api;
 use rocket::response::Debug;
 use rocket::{Build, Rocket, State};
@@ -48,8 +49,7 @@ impl StateData {
             .timestamp
             .lock()
             .ok()
-            .map(|a| a.map(|b| b.elapsed().as_secs()))
-            .flatten();
+            .and_then(|a| a.map(|b| b.elapsed().as_secs()));
 
         if let Some(elapsed) = elapsed_opt {
             elapsed > interval_secs
@@ -74,7 +74,7 @@ pub fn read_settings() -> FusionsolarConfig {
 }
 
 #[get("/metrics")]
-async fn metrics_route(state: &State<StateData>) -> Result<String, Debug<fusionsolar_rs::Error>> {
+async fn metrics_route(state: &State<StateData>) -> Result<String, Debug<api::Error>> {
     if state.interval_elapsed(state.interval) {
         metrics::collect(&state.api).await?;
         state.touch();
@@ -85,11 +85,9 @@ async fn metrics_route(state: &State<StateData>) -> Result<String, Debug<fusions
 }
 
 #[get("/dump-devices")]
-async fn dump_devices_route(
-    state: &State<StateData>,
-) -> Result<String, Debug<fusionsolar_rs::Error>> {
-    let logged_in_api = fusionsolar_rs::login(&state.api).await?;
-    let dump = fusionsolar_rs::dump_devices(&logged_in_api).await?;
+async fn dump_devices_route(state: &State<StateData>) -> Result<String, Debug<api::Error>> {
+    let logged_in_api = api::login(&state.api).await?;
+    let dump = api::dump_devices(&logged_in_api).await?;
 
     Ok(format!("{:#?}", dump))
 }
@@ -99,7 +97,7 @@ fn rocket() -> Rocket<Build> {
     env_logger::init();
 
     let settings = read_settings();
-    let api = fusionsolar_rs::api(settings.api_url, settings.username, settings.password);
+    let api = api::api(settings.api_url, settings.username, settings.password);
     let state = StateData {
         api,
         interval: settings.interval,

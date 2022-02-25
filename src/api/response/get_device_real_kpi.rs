@@ -1,7 +1,4 @@
-use crate::api::response::device_type;
-use crate::model::{DeviceTypeId, SupportedDeviceTypeId};
 use serde::Deserialize;
-use serde_json::Value;
 
 /* Device Type 1: String Inverter */
 pub mod string_inverter {
@@ -25,36 +22,4 @@ pub mod string_inverter {
 #[derive(Deserialize)]
 pub struct StringInverter {
     pub data: Vec<string_inverter::Data>,
-}
-
-pub enum GetDeviceRealKpi {
-    StringInverter(StringInverter),
-}
-
-impl<'de> serde::Deserialize<'de> for GetDeviceRealKpi {
-    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let data = Value::deserialize(d)?;
-
-        let device_type_id = data
-            .get("params")
-            .and_then(|v| v.get("devTypeId"))
-            .and_then(Value::as_u64)
-            .ok_or_else(|| serde::de::Error::missing_field("devTypeId"))?;
-
-        /* Deserialize into variant of `GetDeviceRealKpi` depending on `.params.devTypeId` */
-        if let DeviceTypeId::SupportedDeviceTypeId(supported_type_id) =
-            device_type::from_u64(device_type_id)
-        {
-            match supported_type_id {
-                SupportedDeviceTypeId::StringInverter => Ok(GetDeviceRealKpi::StringInverter(
-                    StringInverter::deserialize(data).unwrap(),
-                )),
-            }
-        } else {
-            Err(serde::de::Error::custom(format!(
-                "Unsupported GetDeviceRealKpi device type: {}",
-                device_type_id
-            )))
-        }
-    }
 }

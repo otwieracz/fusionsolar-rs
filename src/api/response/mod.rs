@@ -1,40 +1,11 @@
-pub mod device_type;
-mod get_device_list;
+pub mod get_device_list;
 pub mod get_device_real_kpi;
-mod get_station_real_kpi;
-mod get_stations_list;
-
-use serde::Deserialize;
-
-/* Generic success */
-#[derive(Deserialize)]
-pub struct SuccessResponse {
-    pub success: bool,
-}
-
-/* Generic error */
-#[derive(Deserialize)]
-pub struct ErrorResponse {
-    #[serde(rename = "failCode")]
-    pub fail_code: u32,
-    pub message: Option<String>,
-}
-
-/* Valid response types */
-#[derive(Deserialize)]
-#[serde(untagged)]
-pub enum FusionsolarApiResponse {
-    GetStationsList(get_stations_list::GetStationsList),
-    GetStationRealKpi(get_station_real_kpi::GetStationRealKpi),
-    GetDevicesList(get_device_list::GetDevicesList),
-    GetDeviceRealKpi(get_device_real_kpi::GetDeviceRealKpi),
-    Success(SuccessResponse),
-    Error(ErrorResponse),
-}
+pub mod get_station_real_kpi;
+pub mod get_stations_list;
 
 #[cfg(test)]
 mod test {
-    use super::get_device_real_kpi::GetDeviceRealKpi;
+    use super::get_device_real_kpi::StringInverter;
     use std::fs;
     use std::path::PathBuf;
 
@@ -65,39 +36,28 @@ mod test {
     #[test]
     fn get_device_real_kpi() {
         let input = read_resource("getDeviceRealKpi.json");
-        let output: GetDeviceRealKpi = serde_json::from_str(&input).unwrap();
-        match output {
-            GetDeviceRealKpi::StringInverter(i) => {
-                assert_eq!(2.053, i.data[0].data_item_map.active_power);
-            }
-        }
+        let output: StringInverter = serde_json::from_str(&input).unwrap();
+        assert_eq!(2.053, output.data[0].data_item_map.active_power);
     }
 
     #[test]
     #[should_panic]
     fn get_device_real_kpi_unsupported() {
         let unsupported_type = read_resource("getDeviceRealKpi_Unsupported.json");
-        let unsupported_type_output: GetDeviceRealKpi =
-            serde_json::from_str(&unsupported_type).unwrap();
-        match unsupported_type_output {
-            GetDeviceRealKpi::StringInverter(i) => {
-                assert_eq!(2.053, i.data[0].data_item_map.active_power);
-            }
-        }
+        serde_json::from_str::<StringInverter>(&unsupported_type).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn get_device_real_kpi_valid_json() {
         let valid_json_input = read_resource("valid_json.json");
-        let _valid_json_output: GetDeviceRealKpi = serde_json::from_str(&valid_json_input).unwrap();
+        serde_json::from_str::<StringInverter>(&valid_json_input).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn get_device_real_kpi_invalid_json() {
         let invalid_json_input = read_resource("invalid_json.json");
-        let _invalid_json_output: GetDeviceRealKpi =
-            serde_json::from_str(&invalid_json_input).unwrap();
+        serde_json::from_str::<StringInverter>(&invalid_json_input).unwrap();
     }
 }

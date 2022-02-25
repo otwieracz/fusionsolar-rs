@@ -1,16 +1,12 @@
+use num_derive::FromPrimitive;
+
 type KWh = f64;
 
 pub type UnsupportedDeviceTypeId = u64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SupportedDeviceTypeId {
-    StringInverter = 1,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, FromPrimitive)]
 pub enum DeviceTypeId {
-    UnsupportedDeviceTypeId(UnsupportedDeviceTypeId),
-    SupportedDeviceTypeId(SupportedDeviceTypeId),
+    StringInverter = 1,
 }
 
 #[derive(Debug, Clone)]
@@ -32,9 +28,8 @@ pub struct Station {
     pub code: String,
 }
 
-#[derive(Eq, PartialEq, Hash)]
 pub struct Device {
-    pub type_id: DeviceTypeId,
+    pub type_id: u64,
     pub id: u64,
 }
 

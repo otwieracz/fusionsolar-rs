@@ -1,4 +1,3 @@
-use crate::model::DeviceTypeId;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -6,7 +5,7 @@ use serde::Deserialize;
 pub struct Data {
     pub dev_name: String,
     pub id: u64,
-    pub dev_type_id: DeviceTypeId,
+    pub dev_type_id: u64,
 }
 
 #[derive(Deserialize)]
