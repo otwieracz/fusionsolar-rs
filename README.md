@@ -1,4 +1,5 @@
 # fusionsolar-rs
+[![Build Status](https://app.travis-ci.com/otwieracz/fusionsolar-rs.svg?branch=master)](https://app.travis-ci.com/otwieracz/fusionsolar-rs)
 
 `Prometheus` exporter for Huawei PV inverters.
 
