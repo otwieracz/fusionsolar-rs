@@ -8,7 +8,6 @@ extern crate rocket;
 use config::Config;
 use fusionsolar_rs::api;
 use fusionsolar_rs::model::Api;
-use rocket::response::Debug;
 use rocket::{Build, Rocket, State};
 use std::sync::Mutex;
 use std::time::Instant;
@@ -74,18 +73,18 @@ pub fn read_settings() -> FusionsolarConfig {
 }
 
 #[get("/metrics")]
-async fn metrics_route(state: &State<StateData>) -> Result<String, Debug<api::Error>> {
+async fn metrics_route(state: &State<StateData>) -> Result<String, api::Error> {
     if state.interval_elapsed(state.interval) {
         metrics::collect(&state.api).await?;
         state.touch();
     } else {
         log::info!("interval time not yet elapsed since last run; returning cached result")
     }
-    metrics::read().await.map_err(Debug)
+    metrics::read().await
 }
 
 #[get("/dump-devices")]
-async fn dump_devices_route(state: &State<StateData>) -> Result<String, Debug<api::Error>> {
+async fn dump_devices_route(state: &State<StateData>) -> Result<String, api::Error> {
     let logged_in_api = api::login(&state.api).await?;
     let dump = api::dump_devices(&logged_in_api).await?;
 

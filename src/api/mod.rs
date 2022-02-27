@@ -1,7 +1,10 @@
 pub mod endpoint;
+pub mod error;
 pub mod response;
 
 use crate::model;
+pub use error::Error;
+use reqwest::Response;
 use response::get_device_list::GetDevicesList;
 use response::get_device_real_kpi;
 use response::get_station_real_kpi::GetStationRealKpi;
@@ -12,22 +15,57 @@ use std::collections::HashMap;
 
 const XSRF_TOKEN: &str = "XSRF-TOKEN";
 
-#[derive(Debug, Clone)]
-pub enum Error {
-    LoginError(String),
-    ApiError(String),
-    UnexpectedApiResponse,
-    InvalidResponse(String, String),
-    UnknownDeviceType(u64),
-    FormatError,
-    InternalError,
-}
-
 pub fn api(api_url: String, username: String, password: String) -> model::Api {
     model::Api {
         api_url,
         username,
         password,
+    }
+}
+
+fn extract_xsrf_token(response: Response) -> Result<String, Error> {
+    response
+        .cookies()
+        .find(|cookie| cookie.name() == XSRF_TOKEN)
+        .ok_or_else(|| {
+            Error::LoginError(format!(
+                "No XSRF-TOKEN received (server responded {})",
+                response.status()
+            ))
+        })
+        .map(|cookie| String::from(cookie.value()))
+}
+
+/// Map Non-200 API response to Error
+fn map_api_err(error: reqwest::Error) -> Error {
+    match error.status() {
+        Some(http::StatusCode::TOO_MANY_REQUESTS) => Error::RateExceeded(error.to_string()),
+        Some(http::StatusCode::UNAUTHORIZED) => Error::LoginError(error.to_string()),
+        _ => Error::ApiError(error.to_string()),
+    }
+}
+
+/// Process value of valid HTTP response (2xx) to identify potential API-level error indicated
+/// with non-true `success`. Return specific or generic error in that case or carry the `value`
+/// forward if it is identified as successful response.
+fn map_response_status(value: Value) -> Result<Value, Error> {
+    let success = value
+        .get("success")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+
+    let fail_code = value.get("failCode").and_then(Value::as_u64);
+
+    if success {
+        Ok(value)
+    } else {
+        match fail_code.and_then(num::FromPrimitive::from_u64) {
+            /* {"data":"ACCESS_FREQUENCY_IS_TOO_HIGH","failCode":407,"params":null,"success":false} */
+            Some(response::FailCode::AccessFrequencyIsTooHigh) => {
+                Err(Error::RateExceeded(value.to_string()))
+            }
+            _ => Err(Error::ApiError(value.to_string())),
+        }
     }
 }
 
@@ -43,26 +81,18 @@ pub async fn login(api: &model::Api) -> Result<model::LoggedInApi, Error> {
         ("systemCode", api.password.to_owned()),
     ]);
 
-    match client.post(url).json(&request_body).send().await {
-        Ok(response) => match response
-            .cookies()
-            .find(|cookie| cookie.name() == XSRF_TOKEN)
-        {
-            Some(cookie) => {
-                let api = model::LoggedInApi {
-                    api_url: api.api_url.to_owned(),
-                    xsrf_token: String::from(cookie.value()),
-                    client,
-                };
-                Ok(api)
-            }
-            None => Err(Error::LoginError(format!(
-                "No XSRF-TOKEN received (server responded {})",
-                response.status()
-            ))),
-        },
-        Err(e) => Err(Error::LoginError(e.to_string())),
-    }
+    client
+        .post(url)
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(map_api_err)
+        .map(extract_xsrf_token)?
+        .map(|token| model::LoggedInApi {
+            api_url: api.api_url.to_owned(),
+            xsrf_token: token,
+            client,
+        })
 }
 
 async fn post(
@@ -81,13 +111,14 @@ async fn post(
     request
         .send()
         .await
-        .map_err(|e| Error::ApiError(format!("Error sending API request: {}", e)))
+        .map_err(map_api_err)
         .map(|r| r.text())?
         .await
         .map_err(|e| Error::ApiError(format!("Error reading API response: {}", e)))
         .map(|s| {
             serde_json::from_str::<Value>(&s).map_err(|e| Error::InvalidResponse(s, e.to_string()))
         })?
+        .map(map_response_status)?
 }
 
 pub async fn stations(api: &model::LoggedInApi) -> Result<Vec<model::Station>, Error> {
@@ -216,7 +247,7 @@ pub async fn dump_devices(api: &model::LoggedInApi) -> Result<HashMap<u64, Value
                 ]);
 
                 let response = post(api, endpoint::DEVICE_REAL_KPI, Some(&request_body)).await?;
-                if let Ok(value) = serde_json::from_value::<Value>(response) {
+                if let Ok(value) = serde_json::from_value::<Value>(response.clone()) {
                     if let Some(data_item_map) = value
                         .get("data")
                         .and_then(|v| v.get(0))
@@ -225,9 +256,10 @@ pub async fn dump_devices(api: &model::LoggedInApi) -> Result<HashMap<u64, Value
                         dump.insert(device.type_id, data_item_map.to_owned());
                     } else {
                         log::warn!(
-                            "No dataItemMap returned for device {}: {}",
+                            "No dataItemMap returned for device {}: {}: {}",
                             device.type_id,
-                            device.id
+                            device.id,
+                            response.to_string()
                         );
                     }
                 }

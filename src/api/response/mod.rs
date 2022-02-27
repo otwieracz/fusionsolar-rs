@@ -1,7 +1,14 @@
+use num_derive::FromPrimitive;
+
 pub mod get_device_list;
 pub mod get_device_real_kpi;
 pub mod get_station_real_kpi;
 pub mod get_stations_list;
+
+#[derive(FromPrimitive)]
+pub enum FailCode {
+    AccessFrequencyIsTooHigh = 407,
+}
 
 #[cfg(test)]
 mod test {
